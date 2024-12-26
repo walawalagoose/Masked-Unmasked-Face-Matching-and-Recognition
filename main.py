@@ -33,7 +33,7 @@ preprocessed_dataset_path = config.preprocessed_dataset_path
 # model_path = config.model_path + '\\model_top100_pretrained_ori.pth'
 # model_path = config.model_path + '\\model_top100_unpretrained.pth'
 # model_path = config.model_path + '\\model_top100_pretrained.pth'
-model_path = config.model_path + '\\model_top100_pretrained_ori_prototype.pth'
+model_path = config.model_path + '\\model_top100_pretrained_ori.pth'
 # model_path = config.model_path + '\\model_top100_pretrained_unblurred.pth'
 # model_path = config.model_path + '\\model_georgia_ori_prototype.pth'
 
@@ -385,7 +385,8 @@ def all_test():
 
 if __name__ == '__main__':
     # 加载设备
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    # device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    device = 'cpu'
 
     # 数据转换，包括resize、转化为Tensor和normalization（这个一定要！）
     transform = transforms.Compose([
@@ -395,23 +396,23 @@ if __name__ == '__main__':
     ])
 
     # 数据加载
-    # train_loader, val_loader, test_loader_unmasked, num_classes = load_celeba_data("D:\\NUS_proj\\Bonus\\datasets\\Georgia\\Unmasked_processed", batch_size=32, transform=transform, shuffle=True, train_ratio=0.8,test_ratio=0.1)
-    # test_loader_masked = load_celeba_data_masked("D:\\NUS_proj\\Bonus\\datasets\\Georgia\\Masked", batch_size=32, transform=transform)  # 使用相同的transform
+    # train_loader, val_loader, test_loader_unmasked, num_classes = load_celeba_data(f"{config.root_path}Georgia\\Unmasked_processed", batch_size=32, transform=transform, shuffle=True, train_ratio=0.8,test_ratio=0.1)
+    # test_loader_masked = load_celeba_data_masked(f"{config.root_path}Georgia\\Masked", batch_size=32, transform=transform)  # 使用相同的transform
     train_loader, val_loader, test_loader_unmasked, num_classes = load_celeba_data(
         config.unmasked_dataset_path, batch_size=1, transform=transform, shuffle=True,
         train_ratio=0.8, test_ratio=0.1)
-    test_loader_masked = load_celeba_data_masked(config.masked_dataset_path, batch_size=1,
+    test_loader_masked = load_celeba_data_masked(config.unmasked_dataset_path, batch_size=1,
                                                  transform=transform)  # 使用相同的transform
 
     # 模型定义
     # model = FaceNet2(num_classes=num_classes, dropout=0.3, device=device, pretrain=False).cuda()
-    model = FaceNet2(num_classes=num_classes, dropout=0.3, device=device, pretrain=True).cuda()
+    model = FaceNet2(num_classes=num_classes, dropout=0.3, device=device, pretrain=True).cpu()
 
     # all_train() # 训练
     # all_train_prototype() # 优化
 
-    # # 加载模型
-    # model.load_state_dict(torch.load(model_path))
+    # 加载模型
+    model.load_state_dict(torch.load(model_path))
 
     # 绘制feature map
     register_hooks(model) # 注册钩子函数
@@ -440,7 +441,7 @@ if __name__ == '__main__':
     # prototypes = calculate_prototypes_hog(train_loader, device)
 
     # all_test_prototype()
-    # all_test_knn()
+    all_test_knn()
     # all_test_rf()
     # all_test_svm()
 

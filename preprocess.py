@@ -1,5 +1,5 @@
 """
-    这里没调用，直接使用的与处理后数据集
+    数据集预处理
 """
 
 import cv2
@@ -8,6 +8,7 @@ import dlib
 import os
 from matplotlib import pyplot as plt
 from tqdm import tqdm
+import pickle
 
 # 数据集路径
 unmasked_dir = '1'
@@ -226,6 +227,48 @@ def process_images_in_directory(input_dir, output_dir):
                         # if contrast_image is not None:
                         # 对特定区域应用模糊
                         apply_blur_to_mask_region(output_path, output_path)
+
+def preprocess_and_save_keypoints(dataset, predictor_path, save_path, margin=10, image_size=(224, 224)):
+    """
+    预处理数据集中的所有图像，提取嘴巴区域的关键点，并将其保存为 Pickle 文件。
+
+    参数:
+        dataset (Dataset): PyTorch 数据集对象。
+        predictor_path (str): dlib 形状预测器的路径。
+        save_path (str): 要保存的 Pickle 文件路径。
+        margin (int, optional): 在嘴巴区域周围添加的边距。默认值为 10。
+        image_size (tuple, optional): 输入图像的尺寸。默认值为 (224, 224)。
+    """
+    detector = dlib.get_frontal_face_detector()
+    predictor = dlib.shape_predictor(predictor_path)
+    keypoints_dict = {}
+
+    print("开始预处理关键点并保存为 Pickle 文件...")
+    for idx in tqdm(range(len(dataset))):
+        img_path = dataset.image_paths[idx]
+        try:
+            image = cv2.imread(img_path)
+            if image is None:
+                keypoints_dict[idx] = None
+                continue
+            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+            dets = detector(gray, 1)
+            if len(dets) == 0:
+                keypoints_dict[idx] = None
+                continue
+            # 假设每张图像只有一个人脸，取第一个检测到的人脸
+            shape = predictor(gray, dets[0])
+            mouth_points = [(shape.part(j).x, shape.part(j).y) for j in range(48, 68)]
+            keypoints_dict[idx] = mouth_points
+        except Exception as e:
+            print(f"处理图像 {img_path} 时出错: {e}")
+            keypoints_dict[idx] = None
+
+    # 保存关键点信息到 Pickle 文件
+    with open(save_path, 'wb') as f:
+        pickle.dump(keypoints_dict, f)
+
+    print(f"关键点信息已保存到 {save_path}")
 
 
 if __name__ == '__main__':
