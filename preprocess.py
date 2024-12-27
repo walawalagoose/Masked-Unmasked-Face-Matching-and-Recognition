@@ -228,6 +228,7 @@ def process_images_in_directory(input_dir, output_dir):
                         # 对特定区域应用模糊
                         apply_blur_to_mask_region(output_path, output_path)
 
+
 def preprocess_and_save_keypoints(dataset, predictor_path, save_path, margin=10, image_size=(224, 224)):
     """
     预处理数据集中的所有图像，提取嘴巴区域的关键点，并将其保存为 Pickle 文件。
