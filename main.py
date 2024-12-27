@@ -10,8 +10,9 @@ from sklearn.multiclass import OneVsRestClassifier
 # import face_recognition
 
 import config
-from dataset import load_celeba_data, load_celeba_data_masked
-from models import FaceNet2
+from preprocess import preprocess_and_save_keypoints
+from dataset import load_celeba_data, load_celeba_data_masked, load_celeba_data_with_keypoints
+from models import FaceNet2, FaceNet2_CBAM
 from losses import ArcFaceLoss
 from train_vel_test import train_model, train_model_prototype
 from prototype import calculate_prototypes, calculate_prototypes_hog, calculate_distances, get_sorted_labels
@@ -401,12 +402,16 @@ if __name__ == '__main__':
     train_loader, val_loader, test_loader_unmasked, num_classes = load_celeba_data(
         config.unmasked_dataset_path, batch_size=1, transform=transform, shuffle=True,
         train_ratio=0.8, test_ratio=0.1)
+    # train_loader, val_loader, test_loader_unmasked, num_classes = load_celeba_data_with_keypoints(
+    #     config.unmasked_dataset_path, batch_size=1, transform=transform, shuffle=True,
+    #     train_ratio=0.8, predictor_path="D:\\Coding_projects\\python_pj\\Masked-Unmasked-Face-Matching-and-Recognition\\1\\shape_predictor_68_face_landmarks.dat")
     test_loader_masked = load_celeba_data_masked(config.unmasked_dataset_path, batch_size=1,
                                                  transform=transform)  # 使用相同的transform
 
     # 模型定义
     # model = FaceNet2(num_classes=num_classes, dropout=0.3, device=device, pretrain=False).cuda()
     model = FaceNet2(num_classes=num_classes, dropout=0.3, device=device, pretrain=True).cpu()
+    # model = FaceNet2_CBAM(num_classes=num_classes, dropout=0.3, device=device, pretrain=True).cpu()
 
     # all_train() # 训练
     # all_train_prototype() # 优化
@@ -441,7 +446,7 @@ if __name__ == '__main__':
     # prototypes = calculate_prototypes_hog(train_loader, device)
 
     # all_test_prototype()
-    all_test_knn()
+    # all_test_knn()
     # all_test_rf()
     # all_test_svm()
 

@@ -10,7 +10,8 @@ import torch.nn.functional as F
 import numpy as np
 from torch.nn.parameter import Parameter
 # from facenet_pytorch import InceptionResnetV1
-from facenet_pytorch_local import InceptionResnetV1, InceptionResnetV1_CBAM
+from facenet_pytorch_local import InceptionResnetV1, CBAM
+# from facenet_pytorch_local import InceptionResnetV1_CBAM
 # from efficientnet_pytorch import EfficientNet
 import timm
 # from torchvision.models.resnet import BasicBlock
@@ -187,51 +188,29 @@ class FaceNet2(nn.Module):
 
 
 class FaceNet2_CBAM(nn.Module):
-    def __init__(self, num_classes, model_name='inceptionresnet', pool=None, dropout=0.3, embedding_size=512,
-                 device='cuda',
-                 pretrain=True):
+    def __init__(self, num_classes, pretrained_backbone=True, dropout=0.3, embedding_size=512, device='cuda'):
         super(FaceNet2, self).__init__()
-        self.model_name = model_name
+        self.device = device
 
-        # 选择骨干网络
-        if model_name == 'resnet':
-            self.model = SEResNeXt101(pretrained=pretrain)
-            self.out_features = 2048
-        # elif model_name == 'effnet':
-        #     self.model = EfficientNetEncoderHead(depth=3, pretrain=pretrain)
-            self.out_features = self.model.out_features
-        elif model_name == 'inceptionresnet':
-            self.model = InceptionResnetV1_CBAM(pretrained=pretrain, classify=False, num_classes=num_classes,
-                                                dropout_prob=dropout, device=device)
-            self.out_features = 512  # 根据 last_linear 输出的维度
-        else:
-            raise ValueError("Unsupported model_name")
+        self.backbone = InceptionResnetV1(pretrained=pretrained_backbone)
+        self.backbone.to(device)
 
-        # 全局池化
-        if (pool == "gem"):
-            self.global_pool = GeM(p_trainable=True)
-        else:
-            self.global_pool = nn.AdaptiveAvgPool2d(1)
+        self.cbam = CBAM(channels=512)
 
-        # Neck
+        self.global_pool = nn.AdaptiveAvgPool2d(1)
+
         self.neck = nn.Sequential(
-            nn.Linear(self.out_features, embedding_size, bias=True),
+            nn.Linear(512, embedding_size, bias=True),
             nn.BatchNorm1d(embedding_size, eps=0.001),
         )
+
         self.dropout = nn.Dropout(p=dropout)
         self.head = ArcMarginProduct(embedding_size, num_classes)
 
-        # 初始化面部检测器和预测器
         self.detector = dlib.get_frontal_face_detector()
         self.predictor = dlib.shape_predictor('D:\\Coding_projects\\python_pj\\Masked-Unmasked-Face-Matching-and-Recognition\\1\\shape_predictor_68_face_landmarks.dat')
 
     def mask_mouth_region(self, feature_map, shape, image_size, margin=10):
-        """
-        feature_map: CNN的特征图，形状为 [B, C, H, W]
-        shape: dlib预测的面部关键点
-        image_size: 输入图像的大小 (H, W)
-        margin: 额外的边距
-        """
         B, C, H, W = feature_map.size()
         device = feature_map.device
         masked_feature = feature_map.clone()
@@ -244,7 +223,6 @@ class FaceNet2_CBAM(nn.Module):
             y_min = np.min(mouth_points[:, 1]) - margin
             y_max = np.max(mouth_points[:, 1]) + margin
 
-            # 将图像坐标转换为特征图坐标
             scale_x = W / image_size[1]
             scale_y = H / image_size[0]
             x_min = int(max(0, x_min * scale_x))
@@ -252,7 +230,6 @@ class FaceNet2_CBAM(nn.Module):
             y_min = int(max(0, y_min * scale_y))
             y_max = int(min(H, y_max * scale_y))
 
-            # 创建掩码
             masked_feature[i, :, y_min:y_max, x_min:x_max] = 0  # 或其他抑制方法
 
         return masked_feature
@@ -284,20 +261,20 @@ class FaceNet2_CBAM(nn.Module):
                     keypoints.append(None)
 
         # 进行特征提取
-        features = self.model(x)  # [B, C, H, W]
+        features = self.backbone(x).unsqueeze(-1).unsqueeze(-1)  # 假设 backbone 输出 [B, C]
+        features = self.global_pool(features)  # [B, C, 1, 1]
+
+        # 扩展到 [B, C, H, W]，这里假设 H=W=1
+        # 如果 backbone 的输出是 [B, C, H, W]，则无需调整
+        # 在此示例中，我们假设需要扩展为 [B, C, H, W]
+        # 实际情况请根据 backbone 的输出调整
+        # features = features.expand(-1, -1, H, W)  # 示例
 
         # 创建掩码
-        masked_features = []
-        for i in range(B):
-            if keypoints[i] is not None:
-                shape = keypoints[i]
-                feature_map = features[i].unsqueeze(0)  # [1, C, H, W]
-                masked_feature = self.mask_mouth_region(feature_map, shape, image_size)
-                masked_features.append(masked_feature)
-            else:
-                masked_features.append(features[i].unsqueeze(0))  # 无检测到人脸，保持原特征
+        masked_features = self.mask_mouth_region(features, keypoints, image_size)
 
-        masked_features = torch.cat(masked_features, dim=0).to(device)  # [B, C, H, W]
+        # 应用 CBAM
+        masked_features = self.cbam(masked_features)
 
         # 全局池化
         x = self.global_pool(masked_features)  # [B, C, 1, 1]
