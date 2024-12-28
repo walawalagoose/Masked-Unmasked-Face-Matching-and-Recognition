@@ -88,7 +88,6 @@ def calculate_prototypes_hog(data_loader, device):
     return prototypes  # 返回包含每个类别原型向量的字典
 
 
-
 def calculate_distances(embeddings, prototypes, type='None'):
     """
     计算每个嵌入向量与所有原型之间的距离
@@ -113,6 +112,7 @@ def calculate_distances(embeddings, prototypes, type='None'):
                 distances[i, j] = np.linalg.norm(embedding - prototype)
 
         return distances
+
 
 def calculate_distances_hog(embeddings, prototypes, type='None'):
     """
@@ -144,6 +144,7 @@ def get_sorted_labels(distances, prototypes, type='None'):
     sorted_labels = np.vectorize(lambda x: prototype_labels[x])(sorted_labels)
 
     return sorted_labels
+
 
 # 定义新的联合损失类
 class CombinedLoss(nn.Module):
@@ -179,6 +180,7 @@ class CombinedLoss(nn.Module):
 
         prototypes = {label: np.mean(embeddings, axis=0) for label, embeddings in embeddings_dict.items()}
         return prototypes
+
 
 # 定义分配损失类
 class AssignmentLoss(nn.Module):
@@ -261,7 +263,6 @@ class OrthogonalLoss(nn.Module):
         orthogonal_loss = torch.stack(cosine_similarities).sum()
         # 归一化 上三角矩阵
         return orthogonal_loss / ((num_prototypes**2 + num_prototypes)/2)
-
 
 # class LossFunctions:
 #
